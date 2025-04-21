@@ -1,0 +1,100 @@
+/* Define tus colores personalizados como variables CSS */
+:root {
+    --mlb-blue-color: #003C9A; /* Azul MLB ajustado para modo oscuro */
+    --mlb-red-color: #E40046;  /* Rojo MLB ajustado para modo oscuro */
+  }
+  
+  /* Estilos base */
+  body {
+      font-family: 'Inter', sans-serif; /* Fuente por defecto para el cuerpo */
+      background-color: #111827; /* gray-900 */
+      /* Asegúrate de que el texto base tenga buen contraste */
+      color: #e5e7eb; /* gray-200 */
+  }
+  
+  /* Aplica la fuente Oswald donde usaste la clase .font-oswald o a elementos específicos */
+  h1, h2, h3, button, .font-oswald {
+      font-family: 'Oswald', sans-serif;
+  }
+  
+  /* --- Definiciones para Clases Personalizadas de Tailwind --- */
+  
+  /* Colores */
+  .bg-mlb-blue { background-color: var(--mlb-blue-color); }
+  .text-mlb-red { color: var(--mlb-red-color); }
+  .border-mlb-blue { border-color: var(--mlb-blue-color); }
+  .border-mlb-red { border-color: var(--mlb-red-color); }
+  /* Puedes añadir más si las usaste, ej: text-mlb-blue, bg-mlb-red */
+  .text-blue-400 { color: #60a5fa; } /* Asegurando que las clases estándar usadas también funcionen */
+  .text-red-600 { color: #dc2626; }
+  .text-red-500 { color: #ef4444; }
+  
+  
+  /* Sombras personalizadas para modo oscuro */
+  .shadow-md-dark {
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  }
+  .shadow-lg-dark {
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+  }
+  .shadow-xl-dark {
+       box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  }
+  .shadow-inner-dark {
+       box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.4);
+  }
+  
+  /* --- Otros Estilos Personalizados --- */
+  
+  .fade-in {
+      animation: fadeIn 0.5s ease-in-out;
+  }
+  @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+  }
+  
+  /* Custom scrollbar for dark theme (optional) */
+  #games-container::-webkit-scrollbar {
+      width: 8px;
+  }
+  #games-container::-webkit-scrollbar-track {
+      background: #374151; /* gray-700 */
+      border-radius: 10px;
+  }
+  #games-container::-webkit-scrollbar-thumb {
+      background: #6b7280; /* gray-500 */
+      border-radius: 10px;
+  }
+  #games-container::-webkit-scrollbar-thumb:hover {
+      background: #9ca3af; /* gray-400 */
+  }
+  
+  /* Style for date input icon in dark mode */
+   input[type="date"]::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      opacity: 0.8;
+      filter: invert(90%) sepia(10%) saturate(200%) hue-rotate(180deg) brightness(100%) contrast(90%); /* Light gray/blueish tint */
+  }
+   input[type="date"]:focus::-webkit-calendar-picker-indicator {
+       opacity: 1;
+   }
+  
+  /* Ensure images fit well */
+  .player-img {
+      object-fit: cover;
+      object-position: center;
+  }
+  
+  /* Asegura que los placeholders de nacionalidad tengan estilo */
+  .nationality-placeholder {
+      /* Ya definidos por Tailwind, pero podrías añadir algo si es necesario */
+  }
+  
+  /* Clases de opacidad usadas en iconos */
+  .opacity-10 { opacity: 0.1; }
+  .opacity-75 { opacity: 0.75; }
+  .opacity-80 { opacity: 0.8; }
+  .opacity-90 { opacity: 0.9; }
+  
+  
