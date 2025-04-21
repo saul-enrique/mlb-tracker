@@ -67,55 +67,40 @@ document.addEventListener('DOMContentLoaded', function() {
         const gamesContainer = document.getElementById('games-container');
 
         // --- UI Updates: Prepare for new search ---
-        // Clear previous game results
         if (gamesContainer) gamesContainer.innerHTML = '';
-        // Hide results and 'no results' sections
         if (resultsSection) resultsSection.classList.add('hidden');
         if (noResultsDiv) noResultsDiv.classList.add('hidden');
-        // Show loading indicator
         if (loadingDiv) loadingDiv.classList.remove('hidden');
 
         try {
             // Construct the API URL for the schedule
-            // Uses hydrate=team,venue to try and get related team/venue data in the same request
-            const scheduleUrl = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${selectedDate}&hydrate=team,venue`;
+            // Uses hydrate=team,venue,probablePitcher to explicitly ask for pitcher data
+            const scheduleUrl = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${selectedDate}&hydrate=team,venue,probablePitcher`;
             const response = await fetch(scheduleUrl);
 
-            // Check if the API request was successful
             if (!response.ok) {
-                // Throw an error with details if the request failed
                 throw new Error(`Network Error: ${response.status} ${response.statusText}`);
             }
-            // Parse the JSON response from the API
             const data = await response.json();
 
-            // Hide loading indicator now that data is fetched (or failed)
             if (loadingDiv) loadingDiv.classList.add('hidden');
 
-            // Check if the API returned any games for the selected date
             if (!data.dates || data.dates.length === 0 || data.dates[0].games.length === 0) {
-                // If no games, show the 'no results' message
                 if (noResultsDiv) {
                     noResultsDiv.classList.remove('hidden');
-                    // Ensure the message is the default one
                     noResultsDiv.querySelector('h3').textContent = 'No se Encontraron Partidos';
                     noResultsDiv.querySelector('p').textContent = 'Intenta con otra fecha o cambia el filtro de nacionalidad.';
                 }
-                return; // Stop further processing
+                return;
             }
 
-            // Extract the list of games from the API response
             const games = data.dates[0].games;
-
-            // Call the function to display the games found
+            // Pass selectedNationality to displayGames so it knows if filtering is active
             displayGames(games, selectedNationality);
 
         } catch (error) {
-            // Log the error to the console for debugging
             console.error('Error searching games:', error);
-            // Hide loading indicator
             if (loadingDiv) loadingDiv.classList.add('hidden');
-            // Show the 'no results' div, but display an error message
             if (noResultsDiv) {
                 noResultsDiv.classList.remove('hidden');
                 noResultsDiv.querySelector('h3').textContent = 'Error al Cargar Datos';
@@ -130,73 +115,66 @@ document.addEventListener('DOMContentLoaded', function() {
      * @param {string} selectedNationality - The selected nationality code from the dropdown (e.g., "VEN").
      */
     function displayGames(games, selectedNationality) {
-        // Get references to UI elements
         const container = document.getElementById('games-container');
         const resultsSection = document.getElementById('results-section');
         const resultsCountDiv = document.getElementById('results-count');
         const noResultsDiv = document.getElementById('no-results');
 
-        // Exit if essential containers are missing
         if (!container || !resultsSection || !resultsCountDiv || !noResultsDiv) {
             console.error("One or more result container elements not found");
             return;
         }
-        // Clear any previous game cards
         container.innerHTML = '';
 
-        // Update the results count display
         resultsCountDiv.textContent = `${games.length} Partido${games.length !== 1 ? 's' : ''}`;
 
-        // Handle the case where the API returned an empty games array (should be caught earlier, but double-check)
         if (games.length === 0) {
             noResultsDiv.classList.remove('hidden');
-            resultsSection.classList.add('hidden'); // Hide the results header too
+            resultsSection.classList.add('hidden');
             return;
         }
 
-        // --- Create and Append Game Cards ---
         games.forEach(game => {
             const gameCard = document.createElement('div');
-            // Set a unique ID for each card based on the game's primary key
             gameCard.id = `game-${game.gamePk}`;
-            // Determine border color based on game state (Live = red, otherwise blue)
-            // Use optional chaining (?) to safely access nested properties
             const borderColor = game.status?.abstractGameState === 'Live' ? 'border-mlb-red' : 'border-mlb-blue';
-            // Apply Tailwind classes for styling the card
             gameCard.className = `bg-gray-800 rounded-xl shadow-lg-dark overflow-hidden border-l-4 ${borderColor} hover:shadow-xl-dark transition duration-300 flex flex-col border border-gray-700`;
 
-            // Extract game details, providing defaults if data is missing
             const homeTeam = game.teams.home?.team?.name ?? 'Equipo Local';
             const awayTeam = game.teams.away?.team?.name ?? 'Equipo Visitante';
             const stadium = game.venue?.name ?? 'Estadio Desconocido';
 
-            // Format game time, attempting local time first, then falling back to ET
+            // Extract Probable Pitchers info (Name and ID)
+            const awayPitcherName = game.teams.away?.probablePitcher?.fullName ?? 'Por Determinar';
+            const homePitcherName = game.teams.home?.probablePitcher?.fullName ?? 'Por Determinar';
+            // Get pitcher IDs if available, use 0 or null as fallback
+            const awayPitcherId = game.teams.away?.probablePitcher?.id ?? 0;
+            const homePitcherId = game.teams.home?.probablePitcher?.id ?? 0;
+
+            // Format game time
             let gameTime = 'Hora no disp.';
             let timeZoneUsed = '';
-            try {
+            try { /* ... Time formatting logic ... */
                  const gameDate = new Date(game.gameDate);
-                 // Format time using browser's default locale or Spanish fallback
                  gameTime = gameDate.toLocaleTimeString(navigator.language || 'es-ES', { hour: '2-digit', minute: '2-digit' });
                  try {
-                   // Attempt to extract timezone abbreviation (e.g., PST, EST)
                    const timeString = gameDate.toLocaleTimeString(navigator.language || 'es-ES', {timeZoneName:'short'});
-                   const tzMatch = timeString.match(/\b([A-Z]{2,})\b/); // Regex to find capitalized abbreviation
+                   const tzMatch = timeString.match(/\b([A-Z]{2,})\b/);
                    timeZoneUsed = tzMatch ? tzMatch[1] : '';
-                 } catch(tzError){ /* Ignore timezone formatting error */ }
-            } catch(e) {
+                 } catch(tzError){ /* Ignore timezone error */ }
+            } catch(e) { /* ... Fallback time formatting ... */
                  console.warn(`Could not format local date ${game.gameDate}: ${e}`);
-                 try { // Fallback to US English format in Eastern Time
+                 try {
                    gameTime = `${new Date(game.gameDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' })}`;
                    timeZoneUsed = 'ET';
-                 } catch (e2) { /* Give up if fallback also fails */ }
+                 } catch (e2) { /* Give up */ }
             }
 
-            // Get series description or use default
             const seriesDesc = game.seriesDescription || 'Temporada Regular';
-            // Get detailed game state or use default
             const gameState = game.status?.detailedState || 'Programado';
 
-            // Set the inner HTML of the game card (COMMENTS REMOVED FROM HERE)
+            // Set the inner HTML of the game card
+            // MODIFICATION: Added spans with data-pitcher-id around pitcher names
             gameCard.innerHTML = `
                 <div class="p-5 flex-grow">
                     <div class="flex justify-between items-start mb-4 gap-2">
@@ -209,6 +187,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             <h3 class="text-lg md:text-xl font-bold text-gray-100 leading-tight font-oswald truncate" title="${awayTeam} @ ${homeTeam}">
                                 ${awayTeam} <span class="font-normal text-gray-500 mx-1">@</span> ${homeTeam}
                             </h3>
+                            <p class="text-xs text-gray-400 mt-1 truncate pitcher-line" title="P: ${awayPitcherName} vs ${homePitcherName}">
+                                <i class="fas fa-user-friends mr-1 text-gray-500"></i>
+                                P: <span class="pitcher" data-pitcher-id="${awayPitcherId}">${awayPitcherName}</span> vs <span class="pitcher" data-pitcher-id="${homePitcherId}">${homePitcherName}</span>
+                            </p>
                         </div>
                         <div class="bg-mlb-blue text-white px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap mt-1 shadow-sm flex-shrink-0">
                             ${gameState}
@@ -228,133 +210,108 @@ document.addEventListener('DOMContentLoaded', function() {
                      </div>
                  </div>
             `;
-            // Append the newly created card to the main container
             container.appendChild(gameCard);
         });
 
-        // Show the results section now that cards are added
         resultsSection.classList.remove('hidden');
 
         // --- Trigger fetching of player data ---
-        // If a specific nationality was selected, fetch and display only those players
+        // Pass the original 'game' objects along with the selectedNationality
+        // Note: This assumes 'games' array contains the necessary pitcher IDs now
         if (selectedNationality) {
             fetchAndDisplayPlayersByNationality(games, selectedNationality);
         } else {
-            // Otherwise, fetch data to display all nationalities present in each game
             fetchAllNationalities(games);
         }
     }
 
     /**
      * Fetches detailed player data for a given game, including birth country.
-     * Uses the v1.1 live feed endpoint which often contains roster info.
-     * Fetches full player details in batches using the /people endpoint.
      * @param {string|number} gamePk - The primary key (ID) of the game.
      * @returns {Promise<Array>} - A promise that resolves to an array of player objects or empty array on error.
      */
     async function fetchPlayerData(gamePk) {
         try {
-            // Use the v1.1 live feed endpoint, often includes roster data needed
             const liveFeedUrl = `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`;
             const response = await fetch(liveFeedUrl);
             if (!response.ok) throw new Error(`Error fetching live feed for game ${gamePk} (${response.status})`);
             const data = await response.json();
 
-            // Extract player IDs safely using optional chaining from the boxscore data within the live feed
             const awayPlayers = data?.liveData?.boxscore?.teams?.away?.players ?? {};
             const homePlayers = data?.liveData?.boxscore?.teams?.home?.players ?? {};
-
-            // Combine player IDs from both teams and remove the "ID" prefix
             const playerIds = [...Object.keys(awayPlayers), ...Object.keys(homePlayers)]
                               .map(id => id.replace('ID', ''));
 
-            // If no player IDs found, return empty array
             if (playerIds.length === 0) {
                 console.warn(`No player IDs found in boxscore for game ${gamePk}`);
                 return [];
             }
 
-            // --- Fetch full player details in batches ---
-            // Define max number of IDs per API call to avoid overly long URLs
             const MAX_BATCH_SIZE = 40;
             let allPlayersData = [];
-            // Loop through player IDs in chunks (batches)
             for (let i = 0; i < playerIds.length; i += MAX_BATCH_SIZE) {
                 const batchIds = playerIds.slice(i, i + MAX_BATCH_SIZE);
-                // Construct URL for the /people endpoint with multiple IDs
-                // Hydrate requests related data: current team, season stats, draft year
                 const peopleUrl = `https://statsapi.mlb.com/api/v1/people?personIds=${batchIds.join(',')}&hydrate=currentTeam,stats(type=season,season=${new Date().getFullYear()}),draftYear`;
                 try {
                      const peopleResponse = await fetch(peopleUrl);
                      if (!peopleResponse.ok) throw new Error(`Error fetching player details batch ${i / MAX_BATCH_SIZE} (${peopleResponse.status})`);
                      const peopleData = await peopleResponse.json();
-                     // Add the fetched player data to the main array
                      if (peopleData.people) {
                          allPlayersData = allPlayersData.concat(peopleData.people);
                      }
                 } catch (batchError) {
-                    // Log errors for specific batches but continue processing others
                     console.error(`Error fetching player batch ${Math.floor(i / MAX_BATCH_SIZE)} for game ${gamePk}:`, batchError);
                 }
             }
-            return allPlayersData; // Return the combined player data
+            return allPlayersData;
 
         } catch (error) {
-            // Log general errors during player data fetching
             console.error(`Error fetching player data for game ${gamePk}:`, error);
-            return []; // Return empty array on failure
+            return [];
         }
     }
 
     /**
      * Fetches player data for games and updates the UI to show players
-     * matching the selected nationality, including their images.
-     * @param {Array} games - Array of game objects.
+     * matching the selected nationality, including their images and highlighting matching pitchers.
+     * @param {Array} games - Array of game objects (must contain probablePitcher IDs).
      * @param {string} selectedNationalityCode - The code of the selected nationality (e.g., "VEN").
      */
     async function fetchAndDisplayPlayersByNationality(games, selectedNationalityCode) {
-        // Get the full country name corresponding to the selected code (for filtering API data)
         const selectedCountry = nationalityCodeToCountry[selectedNationalityCode];
-         // Handle cases where the code might not be mapped (e.g., if USA is used directly)
          if (!selectedCountry && selectedNationalityCode !== 'USA') {
              console.warn(`Nationality code not mapped: ${selectedNationalityCode}`);
-             // Optionally clear nationality info in all cards or show a general warning
              return;
          }
 
-        // Process each game concurrently using Promise.allSettled
-        // allSettled ensures all promises complete, even if some fail
-        await Promise.allSettled(games.map(async (game) => {
+        await Promise.allSettled(games.map(async (game) => { // Use the 'game' object from the loop
             const gamePk = game.gamePk;
-            // Find the corresponding game card and containers within it
             const gameCard = document.getElementById(`game-${gamePk}`);
             const nationalityInfoContainer = gameCard?.querySelector(`#nationality-info-${gamePk}`);
             const nationalitiesListContainer = gameCard?.querySelector(`#nationalities-list-${gamePk}`);
 
-            // Skip if the card elements aren't found
             if (!gameCard || !nationalityInfoContainer || !nationalitiesListContainer) return;
 
-            // --- UI Update: Show loading state within the card ---
+            // Clear previous states and show loading
             nationalitiesListContainer.innerHTML = '<span class="nationality-placeholder px-2 py-0.5 text-xs rounded-full bg-gray-600 text-gray-400 animate-pulse">Buscando...</span>';
-            nationalityInfoContainer.innerHTML = ''; // Clear previous specific nationality info
+            nationalityInfoContainer.innerHTML = '';
+            // --- MODIFICATION START: Clear previous pitcher highlights ---
+            gameCard.querySelectorAll('.pitcher-highlight').forEach(el => el.classList.remove('pitcher-highlight'));
+            // --- MODIFICATION END ---
 
-            // Fetch detailed player data for this game
-            const players = await fetchPlayerData(gamePk);
 
-            // Filter the fetched players based on the selected nationality
+            const players = await fetchPlayerData(gamePk); // Fetch all player details
+
+            // Filter players for the nationality info box
             const playersFromSelectedNationality = players.filter(player => {
                 const birthCountry = player.birthCountry;
-                // Match if the API birth country matches the expected name OR if the mapped code matches
                 return (birthCountry && selectedCountry && birthCountry === selectedCountry) ||
                        (birthCountry && countryToNationalityCode[birthCountry] === selectedNationalityCode);
             });
 
-            // --- Update UI: Display filtered players with images ---
+            // Display the filtered players with images (unchanged logic)
             if (playersFromSelectedNationality.length > 0) {
-                // Helper function to generate placeholder image URL with initials
-                const getPlaceholderUrl = (initials) => `https://placehold.co/40x40/4b5563/e5e7eb?text=${initials}&font=oswald`; // Dark bg, light text
-
-                // Set the HTML for the specific nationality info box
+                const getPlaceholderUrl = (initials) => `https://placehold.co/40x40/4b5563/e5e7eb?text=${initials}&font=oswald`;
                 nationalityInfoContainer.innerHTML = `
                     <div class="p-3 bg-gray-700 rounded-lg border border-gray-600 shadow-sm">
                         <div class="flex items-center mb-3">
@@ -365,28 +322,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                         <ul class="space-y-2">
                             ${playersFromSelectedNationality.map(p => {
-                                // Construct potential image URL (EXAMPLE PATTERN - MAY NOT WORK)
                                 const imageUrl = `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic_headshot.png/w_80,h_80,c_fill,g_face,q_auto:best/v1/people/${p.id}/headshot/67/current`;
-
-                                // Generate initials for fallback image
                                 const nameParts = p.fullName?.split(' ') || ['?'];
                                 const initials = (nameParts[0]?.[0] || '') + (nameParts[nameParts.length - 1]?.[0] || '');
                                 const placeholderUrl = getPlaceholderUrl(initials.toUpperCase() || 'NA');
-
-                                // Fallback script for the onerror event
                                 const fallbackScript = `this.onerror=null; this.src='${placeholderUrl}';`;
-
-                                // Create list item HTML with image, name, and position
                                 return `
                                 <li class="flex items-center justify-between text-sm">
                                     <div class="flex items-center space-x-2 min-w-0">
-                                        <img
-                                            src="${imageUrl}"
-                                            alt="[Imagen de ${p.fullName}]"
-                                            class="w-8 h-8 rounded-full player-img border border-gray-500 flex-shrink-0"
-                                            onerror="${fallbackScript}"
-                                            loading="lazy"
-                                        >
+                                        <img src="${imageUrl}" alt="[Imagen de ${p.fullName}]" class="w-8 h-8 rounded-full player-img border border-gray-500 flex-shrink-0" onerror="${fallbackScript}" loading="lazy">
                                         <span class="text-gray-200 truncate" title="${p.fullName}">${p.fullName}</span>
                                     </div>
                                     <span class="text-gray-300 bg-gray-600 px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0">${p.primaryPosition?.abbreviation ?? 'N/A'}</span>
@@ -396,7 +340,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 `;
             } else {
-                // If no players found for the selected nationality in this game
                 nationalityInfoContainer.innerHTML = `
                     <div class="p-2 bg-gray-700 rounded-lg border border-gray-600 text-center">
                         <p class="text-xs text-gray-500 italic">No hay jugadores de ${getNationalityName(selectedNationalityCode)} en este partido.</p>
@@ -404,33 +347,60 @@ document.addEventListener('DOMContentLoaded', function() {
                 `;
             }
 
-            // --- Update UI: Display all nationalities present in this game ---
+            // --- MODIFICATION START: Highlight Pitchers ---
+            // Get pitcher IDs from the original game object passed into the map
+            const awayPitcherId = game.teams.away?.probablePitcher?.id;
+            const homePitcherId = game.teams.home?.probablePitcher?.id;
+
+            // Find pitcher objects in the detailed player data
+            const awayPitcherObj = awayPitcherId ? players.find(p => p.id == awayPitcherId) : null;
+            const homePitcherObj = homePitcherId ? players.find(p => p.id == homePitcherId) : null;
+
+            // Check and highlight away pitcher
+            if (awayPitcherObj) {
+                const awayPitcherNationalityCode = awayPitcherObj.birthCountry ? countryToNationalityCode[awayPitcherObj.birthCountry] : null;
+                if (awayPitcherNationalityCode && awayPitcherNationalityCode === selectedNationalityCode) {
+                    gameCard.querySelector(`.pitcher[data-pitcher-id="${awayPitcherId}"]`)?.classList.add('pitcher-highlight');
+                }
+            }
+
+            // Check and highlight home pitcher
+            if (homePitcherObj) {
+                const homePitcherNationalityCode = homePitcherObj.birthCountry ? countryToNationalityCode[homePitcherObj.birthCountry] : null;
+                if (homePitcherNationalityCode && homePitcherNationalityCode === selectedNationalityCode) {
+                     gameCard.querySelector(`.pitcher[data-pitcher-id="${homePitcherId}"]`)?.classList.add('pitcher-highlight');
+                }
+            }
+            // --- MODIFICATION END ---
+
+
+            // Update the list of all nationalities in the footer
             updateNationalitiesList(players, nationalitiesListContainer, selectedNationalityCode);
         })); // End Promise.allSettled map
     }
 
     /**
      * Fetches player data for games and updates the UI to show tags for all
-     * nationalities present in each game.
+     * nationalities present in each game. Clears pitcher highlights.
      * @param {Array} games - Array of game objects.
      */
      async function fetchAllNationalities(games) {
-         // Process each game concurrently
          await Promise.allSettled(games.map(async (game) => {
             const gamePk = game.gamePk;
             const gameCard = document.getElementById(`game-${gamePk}`);
-            // We only need the list container here, not the specific nationality info container
             const nationalityInfoContainer = gameCard?.querySelector(`#nationality-info-${gamePk}`);
             const nationalitiesListContainer = gameCard?.querySelector(`#nationalities-list-${gamePk}`);
 
-            if (!gameCard || !nationalitiesListContainer) return; // Skip if elements missing
+            if (!gameCard || !nationalitiesListContainer) return;
 
-            // --- UI Update: Show loading state ---
+            // --- UI Update: Show loading state and clear previous ---
             nationalitiesListContainer.innerHTML = '<span class="nationality-placeholder px-2 py-0.5 text-xs rounded-full bg-gray-600 text-gray-400 animate-pulse">Buscando...</span>';
-            // Clear the specific nationality info area if it exists
             if(nationalityInfoContainer) nationalityInfoContainer.innerHTML = '';
+            // --- MODIFICATION START: Clear pitcher highlights ---
+            gameCard.querySelectorAll('.pitcher-highlight').forEach(el => el.classList.remove('pitcher-highlight'));
+            // --- MODIFICATION END ---
 
-            // Fetch player data
+
             const players = await fetchPlayerData(gamePk);
             // Update the list of nationality tags (no specific code highlighted)
             updateNationalitiesList(players, nationalitiesListContainer, null);
@@ -444,51 +414,38 @@ document.addEventListener('DOMContentLoaded', function() {
      * @param {string|null} highlightedCode - The nationality code to highlight, or null.
      */
     function updateNationalitiesList(players, containerElement, highlightedCode) {
-         // Exit if container element is missing
          if (!containerElement) return;
-         // Clear previous content (e.g., "Cargando...")
          containerElement.innerHTML = '';
 
-         // Count occurrences of each nationality
          const nationalitiesInGame = {};
          players.forEach(player => {
              const country = player.birthCountry;
              if (country) {
-                 // Use the mapping to get the standard code (e.g., "DOM")
                  const code = countryToNationalityCode[country] || null;
                  if (code) {
-                     // Increment count for this nationality code
                      nationalitiesInGame[code] = (nationalitiesInGame[code] || 0) + 1;
                  } else {
-                     // Log if a country from the API isn't in our mapping
                      console.warn(`Unmapped birth country: ${country} for player ${player.fullName}`);
-                     // Optional: Could add logic here to display unmapped countries differently
                  }
              }
          });
 
-         // --- Generate and display nationality tags ---
          if (Object.keys(nationalitiesInGame).length > 0) {
              containerElement.innerHTML = Object.entries(nationalitiesInGame)
-                 // Sort tags by player count (descending)
                  .sort((a, b) => b[1] - a[1])
                  .map(([code, count]) => {
-                     // Determine if this tag should be highlighted
                      const isHighlighted = code === highlightedCode;
-                     // Apply different styles for highlighted vs default tags
                      const tagClasses = isHighlighted
-                       ? 'bg-mlb-blue text-white shadow-sm' // Highlighted style
-                       : 'bg-gray-600 text-gray-200 hover:bg-gray-500'; // Default style
+                       ? 'bg-mlb-blue text-white shadow-sm'
+                       : 'bg-gray-600 text-gray-200 hover:bg-gray-500';
                      const fontWeight = isHighlighted ? 'font-semibold' : 'font-normal';
-                     // Create the HTML for the tag
                      return `
                         <span class="px-2 py-0.5 text-[11px] rounded-full ${tagClasses} ${fontWeight} transition-colors duration-150">
                             ${getNationalityName(code)} (${count})
                         </span>
                      `;
-                 }).join(''); // Join all tag HTML strings together
+                 }).join('');
          } else {
-             // Display message if no nationalities could be determined
              containerElement.innerHTML = `<span class="text-xs text-gray-500 italic">Nacionalidades no disponibles.</span>`;
          }
     }
@@ -499,7 +456,6 @@ document.addEventListener('DOMContentLoaded', function() {
      * @returns {string} - The display name (e.g., "Venezuela") or the code itself if not found.
      */
     function getNationalityName(code) {
-        // Map of codes to display names
         const nationalitiesMap = new Map([
             ["USA", "EE.UU."], ["DOM", "Rep. Dominicana"], ["VEN", "Venezuela"],
             ["PUR", "Puerto Rico"], ["CUB", "Cuba"], ["MEX", "México"],
@@ -507,13 +463,10 @@ document.addEventListener('DOMContentLoaded', function() {
             ["PAN", "Panamá"], ["COL", "Colombia"], ["CUR", "Curazao"],
             ["ARU", "Aruba"], ["NED", "Países Bajos"], ["AUS", "Australia"],
             ["TWN", "Taiwán"], ["NIC", "Nicaragua"]
-            // Add more mappings here
         ]);
-        // Return the mapped name or the original code if no mapping exists
         return nationalitiesMap.get(code) || code;
     }
 
     // --- Initial Load ---
-    // Perform an initial search when the page loads to show today's games
     searchGames();
 }); // End DOMContentLoaded listener

@@ -2,6 +2,7 @@
 :root {
     --mlb-blue-color: #003C9A; /* Azul MLB ajustado para modo oscuro */
     --mlb-red-color: #E40046;  /* Rojo MLB ajustado para modo oscuro */
+    --highlight-yellow-color: #facc15; /* Tailwind yellow-400 for highlight */
   }
   
   /* Estilos base */
@@ -24,8 +25,7 @@
   .text-mlb-red { color: var(--mlb-red-color); }
   .border-mlb-blue { border-color: var(--mlb-blue-color); }
   .border-mlb-red { border-color: var(--mlb-red-color); }
-  /* Puedes añadir más si las usaste, ej: text-mlb-blue, bg-mlb-red */
-  .text-blue-400 { color: #60a5fa; } /* Asegurando que las clases estándar usadas también funcionen */
+  .text-blue-400 { color: #60a5fa; }
   .text-red-600 { color: #dc2626; }
   .text-red-500 { color: #ef4444; }
   
@@ -96,5 +96,16 @@
   .opacity-75 { opacity: 0.75; }
   .opacity-80 { opacity: 0.8; }
   .opacity-90 { opacity: 0.9; }
+  
+  /* --- MODIFICATION START: Pitcher Highlight Style --- */
+  .pitcher-highlight {
+    color: var(--highlight-yellow-color); /* Amarillo para resaltar */
+    font-weight: 600; /* semibold */
+    /* Opcional: añadir un pequeño fondo o borde */
+    /* background-color: rgba(250, 204, 21, 0.1); */
+    /* padding: 0 2px; */
+    /* border-radius: 3px; */
+  }
+  /* --- MODIFICATION END --- */
   
   
