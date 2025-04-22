@@ -14,36 +14,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // --- Mappings ---
-    // Map API country names/codes to the dropdown codes (e.g., "VEN", "DOM")
     const countryToNationalityCode = {
-       "USA": "USA", "United States": "USA",
-       "Dominican Republic": "DOM",
-       "Venezuela": "VEN",
-       "Puerto Rico": "PUR",
-       "Cuba": "CUB",
-       "Mexico": "MEX",
-       "Japan": "JPN",
-       "Korea": "KOR", "Korea, Republic of": "KOR",
-       "Canada": "CAN",
-       "Panama": "PAN",
-       "Colombia": "COL",
-       "Curacao": "CUR",
-       "Aruba": "ARU",
-       "Netherlands": "NED",
-       "Australia": "AUS",
-       "Taiwan": "TWN",
-       "Nicaragua": "NIC"
-       // Add more mappings as needed based on API responses
+       "USA": "USA", "United States": "USA", "Dominican Republic": "DOM",
+       "Venezuela": "VEN", "Puerto Rico": "PUR", "Cuba": "CUB", "Mexico": "MEX",
+       "Japan": "JPN", "Korea": "KOR", "Korea, Republic of": "KOR", "Canada": "CAN",
+       "Panama": "PAN", "Colombia": "COL", "Curacao": "CUR", "Aruba": "ARU",
+       "Netherlands": "NED", "Australia": "AUS", "Taiwan": "TWN", "Nicaragua": "NIC"
     };
-
-    // Create a reverse map from dropdown code to the primary API country name (used for filtering)
     const nationalityCodeToCountry = Object.fromEntries(
        Object.entries(countryToNationalityCode)
-         // Exclude keys that are already 3-letter codes to avoid overwriting
          .filter(([country, code]) => !/^[A-Z]{3}$/.test(country))
          .map(([country, code]) => [code, country])
     );
-    // Ensure USA mapping exists if needed for direct comparison
     nationalityCodeToCountry['USA'] = 'USA';
 
 
@@ -52,35 +34,28 @@ document.addEventListener('DOMContentLoaded', function() {
      */
     async function searchGames() {
         const selectedDate = document.getElementById('game-date')?.value;
-        const selectedNationality = document.getElementById('nationality')?.value; // Dropdown code (e.g., "VEN")
-
-        // Exit if date input is somehow missing
+        const selectedNationality = document.getElementById('nationality')?.value;
         if (!selectedDate) {
             console.error("Date input element not found");
             return;
         }
 
-        // Get references to UI elements for showing/hiding states
         const resultsSection = document.getElementById('results-section');
         const noResultsDiv = document.getElementById('no-results');
         const loadingDiv = document.getElementById('loading');
         const gamesContainer = document.getElementById('games-container');
 
-        // --- UI Updates: Prepare for new search ---
+        // UI Updates: Prepare for new search
         if (gamesContainer) gamesContainer.innerHTML = '';
         if (resultsSection) resultsSection.classList.add('hidden');
         if (noResultsDiv) noResultsDiv.classList.add('hidden');
         if (loadingDiv) loadingDiv.classList.remove('hidden');
 
         try {
-            // Construct the API URL for the schedule
-            // Uses hydrate=team,venue,probablePitcher to explicitly ask for pitcher data
-            const scheduleUrl = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${selectedDate}&hydrate=team,venue,probablePitcher`;
+            // Fetch schedule, explicitly asking for probablePitcher and linescore
+            const scheduleUrl = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${selectedDate}&hydrate=team,venue,probablePitcher,linescore`; // Added linescore hydrate
             const response = await fetch(scheduleUrl);
-
-            if (!response.ok) {
-                throw new Error(`Network Error: ${response.status} ${response.statusText}`);
-            }
+            if (!response.ok) throw new Error(`Network Error: ${response.status} ${response.statusText}`);
             const data = await response.json();
 
             if (loadingDiv) loadingDiv.classList.add('hidden');
@@ -95,7 +70,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             const games = data.dates[0].games;
-            // Pass selectedNationality to displayGames so it knows if filtering is active
             displayGames(games, selectedNationality);
 
         } catch (error) {
@@ -111,6 +85,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     /**
      * Displays the list of games and triggers fetching player nationality data.
+     * Shows final score immediately if available.
      * @param {Array} games - Array of game objects from the API.
      * @param {string} selectedNationality - The selected nationality code from the dropdown (e.g., "VEN").
      */
@@ -125,7 +100,6 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         container.innerHTML = '';
-
         resultsCountDiv.textContent = `${games.length} Partido${games.length !== 1 ? 's' : ''}`;
 
         if (games.length === 0) {
@@ -137,21 +111,22 @@ document.addEventListener('DOMContentLoaded', function() {
         games.forEach(game => {
             const gameCard = document.createElement('div');
             gameCard.id = `game-${game.gamePk}`;
-            const borderColor = game.status?.abstractGameState === 'Live' ? 'border-mlb-red' : 'border-mlb-blue';
+            const abstractState = game.status?.abstractGameState; // Final, Live, Preview
+            const borderColor = abstractState === 'Live' ? 'border-mlb-red' : 'border-mlb-blue';
             gameCard.className = `bg-gray-800 rounded-xl shadow-lg-dark overflow-hidden border-l-4 ${borderColor} hover:shadow-xl-dark transition duration-300 flex flex-col border border-gray-700`;
 
+            // Game details
             const homeTeam = game.teams.home?.team?.name ?? 'Equipo Local';
             const awayTeam = game.teams.away?.team?.name ?? 'Equipo Visitante';
             const stadium = game.venue?.name ?? 'Estadio Desconocido';
-
-            // Extract Probable Pitchers info (Name and ID)
             const awayPitcherName = game.teams.away?.probablePitcher?.fullName ?? 'Por Determinar';
             const homePitcherName = game.teams.home?.probablePitcher?.fullName ?? 'Por Determinar';
-            // Get pitcher IDs if available, use 0 or null as fallback
             const awayPitcherId = game.teams.away?.probablePitcher?.id ?? 0;
             const homePitcherId = game.teams.home?.probablePitcher?.id ?? 0;
+            const gameState = game.status?.detailedState || 'Programado';
+            const boxscoreUrl = `https://www.mlb.com/gameday/${game.gamePk}`;
 
-            // Format game time
+            // Time formatting
             let gameTime = 'Hora no disp.';
             let timeZoneUsed = '';
             try { /* ... Time formatting logic ... */
@@ -170,14 +145,28 @@ document.addEventListener('DOMContentLoaded', function() {
                  } catch (e2) { /* Give up */ }
             }
 
-            const seriesDesc = game.seriesDescription || 'Temporada Regular';
-            const gameState = game.status?.detailedState || 'Programado';
+            // Initial Score Display Logic
+            let initialScoreHtml = '';
+            // Check if game is Final and initial linescore data is available
+            if (abstractState === 'Final' && game.linescore?.teams) {
+                const awayRuns = game.linescore.teams.away?.runs ?? '-';
+                const homeRuns = game.linescore.teams.home?.runs ?? '-';
+                initialScoreHtml = `
+                    <div class="flex justify-end items-center space-x-2 mt-2">
+                         <span class="text-xs text-gray-400">${awayTeam.split(' ').pop()}</span>
+                         <span class="text-lg font-semibold text-gray-200">${awayRuns}</span>
+                         <span class="text-gray-500">-</span>
+                         <span class="text-lg font-semibold text-gray-200">${homeRuns}</span>
+                         <span class="text-xs text-gray-400">${homeTeam.split(' ').pop()}</span>
+                    </div>
+                `;
+            }
+
 
             // Set the inner HTML of the game card
-            // MODIFICATION: Added spans with data-pitcher-id around pitcher names
             gameCard.innerHTML = `
                 <div class="p-5 flex-grow">
-                    <div class="flex justify-between items-start mb-4 gap-2">
+                    <div class="flex justify-between items-start mb-2 gap-2">
                         <div class="flex-1 min-w-0">
                             <div class="text-xs sm:text-sm text-gray-400 mb-1 flex items-center flex-wrap gap-x-2 gap-y-1">
                                 <span class="whitespace-nowrap"><i class="far fa-clock mr-1 text-mlb-red opacity-90"></i> ${gameTime} ${timeZoneUsed}</span>
@@ -192,9 +181,18 @@ document.addEventListener('DOMContentLoaded', function() {
                                 P: <span class="pitcher" data-pitcher-id="${awayPitcherId}">${awayPitcherName}</span> vs <span class="pitcher" data-pitcher-id="${homePitcherId}">${homePitcherName}</span>
                             </p>
                         </div>
-                        <div class="bg-mlb-blue text-white px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap mt-1 shadow-sm flex-shrink-0">
-                            ${gameState}
+                        <div class="flex flex-col items-end space-y-1">
+                            <div class="bg-mlb-blue text-white px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap shadow-sm flex-shrink-0">
+                                ${gameState}
+                            </div>
+                            <a href="${boxscoreUrl}" target="_blank" rel="noopener noreferrer" title="Ver Boxscore en MLB.com" class="text-gray-500 hover:text-blue-400 transition-colors duration-150">
+                                <i class="fas fa-chart-bar text-base"></i>
+                            </a>
                         </div>
+                    </div>
+                    <div id="score-info-${game.gamePk}" class="score-info mt-2">
+                        ${initialScoreHtml}
+                        ${abstractState === 'Live' ? '<div class="text-center text-xs text-gray-500 animate-pulse">Cargando marcador...</div>' : ''}
                     </div>
                     <div id="nationality-info-${game.gamePk}" class="nationality-info mt-4 mb-4 space-y-3">
                         </div>
@@ -215,9 +213,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         resultsSection.classList.remove('hidden');
 
-        // --- Trigger fetching of player data ---
-        // Pass the original 'game' objects along with the selectedNationality
-        // Note: This assumes 'games' array contains the necessary pitcher IDs now
+        // Trigger fetching of detailed player and live score data
         if (selectedNationality) {
             fetchAndDisplayPlayersByNationality(games, selectedNationality);
         } else {
@@ -226,9 +222,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
-     * Fetches detailed player data for a given game, including birth country.
+     * Fetches detailed player data AND live game data (linescore, status) for a game.
      * @param {string|number} gamePk - The primary key (ID) of the game.
-     * @returns {Promise<Array>} - A promise that resolves to an array of player objects or empty array on error.
+     * @returns {Promise<object|null>} - A promise resolving to an object { players, linescore, gameState } or null on error.
      */
     async function fetchPlayerData(gamePk) {
         try {
@@ -237,44 +233,126 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!response.ok) throw new Error(`Error fetching live feed for game ${gamePk} (${response.status})`);
             const data = await response.json();
 
+            // Extract Players
             const awayPlayers = data?.liveData?.boxscore?.teams?.away?.players ?? {};
             const homePlayers = data?.liveData?.boxscore?.teams?.home?.players ?? {};
             const playerIds = [...Object.keys(awayPlayers), ...Object.keys(homePlayers)]
                               .map(id => id.replace('ID', ''));
 
-            if (playerIds.length === 0) {
-                console.warn(`No player IDs found in boxscore for game ${gamePk}`);
-                return [];
+            let playersData = [];
+            if (playerIds.length > 0) {
+                const MAX_BATCH_SIZE = 40;
+                for (let i = 0; i < playerIds.length; i += MAX_BATCH_SIZE) {
+                    const batchIds = playerIds.slice(i, i + MAX_BATCH_SIZE);
+                    const peopleUrl = `https://statsapi.mlb.com/api/v1/people?personIds=${batchIds.join(',')}&hydrate=currentTeam,stats(type=season,season=${new Date().getFullYear()}),draftYear`;
+                    try {
+                         const peopleResponse = await fetch(peopleUrl);
+                         if (!peopleResponse.ok) throw new Error(`Error fetching player details batch ${i / MAX_BATCH_SIZE} (${peopleResponse.status})`);
+                         const peopleData = await peopleResponse.json();
+                         if (peopleData.people) {
+                             playersData = playersData.concat(peopleData.people);
+                         }
+                    } catch (batchError) {
+                        console.error(`Error fetching player batch ${Math.floor(i / MAX_BATCH_SIZE)} for game ${gamePk}:`, batchError);
+                    }
+                }
+            } else {
+                 console.warn(`No player IDs found in boxscore for game ${gamePk}`);
             }
 
-            const MAX_BATCH_SIZE = 40;
-            let allPlayersData = [];
-            for (let i = 0; i < playerIds.length; i += MAX_BATCH_SIZE) {
-                const batchIds = playerIds.slice(i, i + MAX_BATCH_SIZE);
-                const peopleUrl = `https://statsapi.mlb.com/api/v1/people?personIds=${batchIds.join(',')}&hydrate=currentTeam,stats(type=season,season=${new Date().getFullYear()}),draftYear`;
-                try {
-                     const peopleResponse = await fetch(peopleUrl);
-                     if (!peopleResponse.ok) throw new Error(`Error fetching player details batch ${i / MAX_BATCH_SIZE} (${peopleResponse.status})`);
-                     const peopleData = await peopleResponse.json();
-                     if (peopleData.people) {
-                         allPlayersData = allPlayersData.concat(peopleData.people);
-                     }
-                } catch (batchError) {
-                    console.error(`Error fetching player batch ${Math.floor(i / MAX_BATCH_SIZE)} for game ${gamePk}:`, batchError);
-                }
-            }
-            return allPlayersData;
+            // Extract Linescore and GameState as well
+            const linescore = data?.liveData?.linescore ?? null;
+            const gameState = data?.gameData?.status ?? null;
+
+            return { players: playersData, linescore, gameState }; // Return object
 
         } catch (error) {
-            console.error(`Error fetching player data for game ${gamePk}:`, error);
-            return [];
+            console.error(`Error fetching player/live data for game ${gamePk}:`, error);
+            return null; // Return null on failure
         }
     }
 
     /**
-     * Fetches player data for games and updates the UI to show players
-     * matching the selected nationality, including their images and highlighting matching pitchers.
-     * @param {Array} games - Array of game objects (must contain probablePitcher IDs).
+     * Updates the score display section of a game card.
+     * @param {string|number} gamePk - The game's primary key.
+     * @param {object|null} linescore - The linescore object from the API.
+     * @param {object|null} gameState - The status object from the API.
+     */
+    function updateScoreDisplay(gamePk, linescore, gameState) {
+        const scoreContainer = document.getElementById(`score-info-${gamePk}`);
+        if (!scoreContainer || !gameState || !linescore) {
+            // If container or data is missing, ensure it's empty
+            if (scoreContainer) scoreContainer.innerHTML = '';
+            return;
+        }
+
+        const abstractState = gameState.abstractGameState;
+
+        // Only update display for Live games here (Final is handled initially)
+        if (abstractState === 'Live') {
+            const awayRuns = linescore.teams?.away?.runs ?? '-';
+            const homeRuns = linescore.teams.home?.runs ?? '-';
+            const awayHits = linescore.teams?.away?.hits ?? '-';
+            const homeHits = linescore.teams.home?.hits ?? '-';
+            const awayErrors = linescore.teams?.away?.errors ?? '-';
+            const homeErrors = linescore.teams.home?.errors ?? '-';
+            const inning = linescore.currentInningOrdinal ?? '';
+            const inningState = linescore.inningState ?? ''; // "Top", "Bottom", "Middle", "End"
+            const isTop = linescore.isTopInning ?? (inningState === 'Top' || inningState === 'Middle');
+
+            // Simple table-like display for R/H/E
+            scoreContainer.innerHTML = `
+                <div class="text-xs border border-gray-700 rounded p-1.5 bg-gray-900 bg-opacity-50">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-semibold ${isTop ? 'text-yellow-400' : ''}">${isTop ? '▲' : '▼'} ${inning}</span>
+                        <div class="flex space-x-2 text-gray-400">
+                            <span>R</span><span>H</span><span>E</span>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center text-sm mb-0.5">
+                        <span class="w-1/2 truncate" title="${linescore.teams?.away?.team?.name ?? ''}">${linescore.teams?.away?.team?.name ?? 'Visitante'}</span>
+                        <div class="flex space-x-2 font-medium text-gray-200">
+                            <span class="w-4 text-center">${awayRuns}</span>
+                            <span class="w-4 text-center">${awayHits}</span>
+                            <span class="w-4 text-center">${awayErrors}</span>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center text-sm">
+                         <span class="w-1/2 truncate" title="${linescore.teams?.home?.team?.name ?? ''}">${linescore.teams?.home?.team?.name ?? 'Local'}</span>
+                        <div class="flex space-x-2 font-medium text-gray-200">
+                            <span class="w-4 text-center">${homeRuns}</span>
+                            <span class="w-4 text-center">${homeHits}</span>
+                            <span class="w-4 text-center">${homeErrors}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (abstractState === 'Final') {
+            // If initialScoreHtml wasn't available initially, display it now.
+            if (!scoreContainer.innerHTML.trim()) { // Only update if it was empty
+                 const awayRuns = linescore.teams?.away?.runs ?? '-';
+                 const homeRuns = linescore.teams.home?.runs ?? '-';
+                 scoreContainer.innerHTML = `
+                    <div class="flex justify-end items-center space-x-2 mt-2">
+                         <span class="text-xs text-gray-400">${linescore.teams?.away?.team?.name.split(' ').pop() ?? ''}</span>
+                         <span class="text-lg font-semibold text-gray-200">${awayRuns}</span>
+                         <span class="text-gray-500">-</span>
+                         <span class="text-lg font-semibold text-gray-200">${homeRuns}</span>
+                         <span class="text-xs text-gray-400">${linescore.teams?.home?.team?.name.split(' ').pop() ?? ''}</span>
+                    </div>
+                 `;
+            }
+        }
+        else {
+            // For Preview, Scheduled, etc., ensure the score area is empty
+            scoreContainer.innerHTML = '';
+        }
+    }
+
+
+    /**
+     * Fetches player/game data and updates UI for a specific nationality filter.
+     * @param {Array} games - Array of game objects from the initial schedule call.
      * @param {string} selectedNationalityCode - The code of the selected nationality (e.g., "VEN").
      */
     async function fetchAndDisplayPlayersByNationality(games, selectedNationalityCode) {
@@ -284,7 +362,7 @@ document.addEventListener('DOMContentLoaded', function() {
              return;
          }
 
-        await Promise.allSettled(games.map(async (game) => { // Use the 'game' object from the loop
+        await Promise.allSettled(games.map(async (game) => {
             const gamePk = game.gamePk;
             const gameCard = document.getElementById(`game-${gamePk}`);
             const nationalityInfoContainer = gameCard?.querySelector(`#nationality-info-${gamePk}`);
@@ -292,24 +370,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (!gameCard || !nationalityInfoContainer || !nationalitiesListContainer) return;
 
-            // Clear previous states and show loading
+            // Clear previous states and show loading for nationality list
             nationalitiesListContainer.innerHTML = '<span class="nationality-placeholder px-2 py-0.5 text-xs rounded-full bg-gray-600 text-gray-400 animate-pulse">Buscando...</span>';
             nationalityInfoContainer.innerHTML = '';
-            // --- MODIFICATION START: Clear previous pitcher highlights ---
             gameCard.querySelectorAll('.pitcher-highlight').forEach(el => el.classList.remove('pitcher-highlight'));
-            // --- MODIFICATION END ---
 
+            // Fetch detailed player data AND live game data
+            const fetchedData = await fetchPlayerData(gamePk);
+            if (!fetchedData) return; // Skip if fetch failed
+            const { players, linescore, gameState } = fetchedData;
 
-            const players = await fetchPlayerData(gamePk); // Fetch all player details
+            // --- Update Score Display ---
+            updateScoreDisplay(gamePk, linescore, gameState); // Call the new function
 
-            // Filter players for the nationality info box
+            // --- Process and Display Players ---
             const playersFromSelectedNationality = players.filter(player => {
                 const birthCountry = player.birthCountry;
                 return (birthCountry && selectedCountry && birthCountry === selectedCountry) ||
                        (birthCountry && countryToNationalityCode[birthCountry] === selectedNationalityCode);
             });
 
-            // Display the filtered players with images (unchanged logic)
+            // Display the filtered players with images and links
             if (playersFromSelectedNationality.length > 0) {
                 const getPlaceholderUrl = (initials) => `https://placehold.co/40x40/4b5563/e5e7eb?text=${initials}&font=oswald`;
                 nationalityInfoContainer.innerHTML = `
@@ -327,15 +408,19 @@ document.addEventListener('DOMContentLoaded', function() {
                                 const initials = (nameParts[0]?.[0] || '') + (nameParts[nameParts.length - 1]?.[0] || '');
                                 const placeholderUrl = getPlaceholderUrl(initials.toUpperCase() || 'NA');
                                 const fallbackScript = `this.onerror=null; this.src='${placeholderUrl}';`;
+                                const playerProfileUrl = `https://www.mlb.com/player/${p.id}`;
                                 return `
                                 <li class="flex items-center justify-between text-sm">
                                     <div class="flex items-center space-x-2 min-w-0">
                                         <img src="${imageUrl}" alt="[Imagen de ${p.fullName}]" class="w-8 h-8 rounded-full player-img border border-gray-500 flex-shrink-0" onerror="${fallbackScript}" loading="lazy">
-                                        <span class="text-gray-200 truncate" title="${p.fullName}">${p.fullName}</span>
+                                        <a href="${playerProfileUrl}" target="_blank" rel="noopener noreferrer" class="text-gray-200 hover:text-blue-300 hover:underline truncate" title="${p.fullName} (Ver Perfil)">
+                                            ${p.fullName}
+                                        </a>
                                     </div>
                                     <span class="text-gray-300 bg-gray-600 px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0">${p.primaryPosition?.abbreviation ?? 'N/A'}</span>
                                 </li>
-                            `}).join('')}
+                                `
+                            }).join('')}
                         </ul>
                     </div>
                 `;
@@ -347,32 +432,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 `;
             }
 
-            // --- MODIFICATION START: Highlight Pitchers ---
-            // Get pitcher IDs from the original game object passed into the map
-            const awayPitcherId = game.teams.away?.probablePitcher?.id;
+            // --- Highlight Pitchers ---
+            const awayPitcherId = game.teams.away?.probablePitcher?.id; // Get ID from initial game data
             const homePitcherId = game.teams.home?.probablePitcher?.id;
-
-            // Find pitcher objects in the detailed player data
-            const awayPitcherObj = awayPitcherId ? players.find(p => p.id == awayPitcherId) : null;
+            const awayPitcherObj = awayPitcherId ? players.find(p => p.id == awayPitcherId) : null; // Find full object in fetched player data
             const homePitcherObj = homePitcherId ? players.find(p => p.id == homePitcherId) : null;
 
-            // Check and highlight away pitcher
             if (awayPitcherObj) {
                 const awayPitcherNationalityCode = awayPitcherObj.birthCountry ? countryToNationalityCode[awayPitcherObj.birthCountry] : null;
                 if (awayPitcherNationalityCode && awayPitcherNationalityCode === selectedNationalityCode) {
                     gameCard.querySelector(`.pitcher[data-pitcher-id="${awayPitcherId}"]`)?.classList.add('pitcher-highlight');
                 }
             }
-
-            // Check and highlight home pitcher
             if (homePitcherObj) {
                 const homePitcherNationalityCode = homePitcherObj.birthCountry ? countryToNationalityCode[homePitcherObj.birthCountry] : null;
                 if (homePitcherNationalityCode && homePitcherNationalityCode === selectedNationalityCode) {
                      gameCard.querySelector(`.pitcher[data-pitcher-id="${homePitcherId}"]`)?.classList.add('pitcher-highlight');
                 }
             }
-            // --- MODIFICATION END ---
-
 
             // Update the list of all nationalities in the footer
             updateNationalitiesList(players, nationalitiesListContainer, selectedNationalityCode);
@@ -380,9 +457,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
-     * Fetches player data for games and updates the UI to show tags for all
-     * nationalities present in each game. Clears pitcher highlights.
-     * @param {Array} games - Array of game objects.
+     * Fetches player/game data and updates UI for all games (no nationality filter).
+     * @param {Array} games - Array of game objects from the initial schedule call.
      */
      async function fetchAllNationalities(games) {
          await Promise.allSettled(games.map(async (game) => {
@@ -393,15 +469,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (!gameCard || !nationalitiesListContainer) return;
 
-            // --- UI Update: Show loading state and clear previous ---
+            // Clear previous states and show loading
             nationalitiesListContainer.innerHTML = '<span class="nationality-placeholder px-2 py-0.5 text-xs rounded-full bg-gray-600 text-gray-400 animate-pulse">Buscando...</span>';
             if(nationalityInfoContainer) nationalityInfoContainer.innerHTML = '';
-            // --- MODIFICATION START: Clear pitcher highlights ---
             gameCard.querySelectorAll('.pitcher-highlight').forEach(el => el.classList.remove('pitcher-highlight'));
-            // --- MODIFICATION END ---
 
 
-            const players = await fetchPlayerData(gamePk);
+            // Fetch detailed player data AND live game data
+            const fetchedData = await fetchPlayerData(gamePk);
+             if (!fetchedData) return; // Skip if fetch failed
+            const { players, linescore, gameState } = fetchedData;
+
+            // --- Update Score Display ---
+            updateScoreDisplay(gamePk, linescore, gameState); // Call the new function
+
             // Update the list of nationality tags (no specific code highlighted)
             updateNationalitiesList(players, nationalitiesListContainer, null);
          })); // End Promise.allSettled map
