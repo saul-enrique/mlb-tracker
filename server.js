@@ -2,7 +2,12 @@
 const express = require('express');
 const path = require('path'); // Herramienta de Node para trabajar con rutas de archivos
 const cors = require('cors');
-const axios = require('axios'); // <-- ¡AÑADE ESTA LÍNEA!
+const axios = require('axios');
+const NodeCache = require('node-cache'); // <-- AÑADE ESTA LÍNEA
+
+// Inicializamos el caché.
+// stdTTL: 300 significa que cada dato guardado expirará automáticamente en 300 segundos (5 minutos).
+const myCache = new NodeCache({ stdTTL: 300 }); // <-- AÑADE ESTA LÍNEA
 
 // 2. Crear nuestra aplicación de servidor
 const app = express();
@@ -23,27 +28,34 @@ app.use(express.static(path.join(__dirname, 'client')));
 // 5. Definición de las rutas de nuestra API
 app.get('/api/schedule', async (req, res) => {
   try {
-    // Obtenemos el parámetro 'date' que nos enviará el frontend
-    // Ejemplo: /api/schedule?date=2024-05-20
     const { date } = req.query;
-
-    // Si no nos envían una fecha, devolvemos un error
     if (!date) {
       return res.status(400).json({ error: 'El parámetro de fecha es requerido' });
     }
 
-    // Construimos la URL de la API de la MLB con la fecha recibida
+    // Creamos una "llave" única para esta petición. Ej: "schedule-2025-08-14"
+    const cacheKey = `schedule-${date}`;
+
+    // 1. REVISAMOS EL CACHÉ PRIMERO
+    if (myCache.has(cacheKey)) {
+      console.log(`✅ ¡CACHE HIT! Sirviendo datos para la fecha: ${date} desde el caché.`);
+      // Si los datos existen en el caché, los devolvemos inmediatamente.
+      return res.json(myCache.get(cacheKey));
+    }
+
+    // 2. SI NO ESTÁ EN EL CACHÉ (CACHE MISS)
+    console.log(`❌ CACHE MISS. Pidiendo datos a la MLB para la fecha: ${date}`);
     const mlbApiUrl = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${date}&hydrate=team,venue,probablePitcher,linescore`;
-
-    // Usamos axios para hacer la petición a la API de la MLB
-    console.log(`Pidiendo datos a la MLB para la fecha: ${date}`);
     const apiResponse = await axios.get(mlbApiUrl);
+    const data = apiResponse.data;
 
-    // Enviamos la respuesta de la MLB de vuelta a nuestro frontend
-    res.json(apiResponse.data);
+    // 3. GUARDAMOS LA RESPUESTA FRESCA EN EL CACHÉ
+    myCache.set(cacheKey, data);
+
+    // Y enviamos la respuesta al usuario
+    res.json(data);
 
   } catch (error) {
-    // Si algo sale mal (ej: la API de MLB falla), capturamos el error
     console.error('Error al contactar la API de la MLB:', error.message);
     res.status(500).json({ error: 'No se pudieron obtener los datos de la API de MLB' });
   }
@@ -52,13 +64,21 @@ app.get('/api/schedule', async (req, res) => {
 // Ruta para obtener los detalles de un juego específico (live feed)
 app.get('/api/gamefeed/:gamePk', async (req, res) => {
   try {
-    // Obtenemos el ID del juego desde los parámetros de la URL
-    const { gamePk } = req.params; // Usamos req.params porque :gamePk está en la ruta
+    const { gamePk } = req.params;
+    const cacheKey = `gamefeed-${gamePk}`;
+
+    const cachedData = myCache.get(cacheKey);
+    if (cachedData) {
+      console.log(`¡Datos de juego servidos desde el caché para: ${gamePk}!`);
+      return res.json(cachedData);
+    }
 
     const mlbApiUrl = `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`;
-
-    console.log(`Pidiendo detalles para el juego: ${gamePk}`);
+    console.log(`Pidiendo detalles para el juego: ${gamePk} (no estaba en caché)`);
     const apiResponse = await axios.get(mlbApiUrl);
+
+    myCache.set(cacheKey, apiResponse.data);
+    console.log(`Datos del juego ${gamePk} guardados en el caché.`);
 
     res.json(apiResponse.data);
 
@@ -71,17 +91,26 @@ app.get('/api/gamefeed/:gamePk', async (req, res) => {
 // Ruta para obtener detalles de múltiples jugadores por sus IDs
 app.get('/api/people', async (req, res) => {
   try {
-    // Obtenemos los IDs de los jugadores desde el query parameter 'personIds'
     const { personIds } = req.query;
-
     if (!personIds) {
       return res.status(400).json({ error: 'Se requieren IDs de personas' });
     }
 
-    const mlbApiUrl = `https://statsapi.mlb.com/api/v1/people?personIds=${personIds}&hydrate=currentTeam,stats(type=season,season=${new Date().getFullYear()}),draftYear`;
+    // Usamos una versión corta de los IDs para la clave del caché
+    const cacheKey = `people-${personIds.substring(0, 50)}`;
 
-    console.log(`Pidiendo detalles para los jugadores: ${personIds.substring(0, 50)}...`); // Mostramos solo los primeros para no saturar la consola
+    const cachedData = myCache.get(cacheKey);
+    if (cachedData) {
+      console.log(`¡Datos de jugadores servidos desde el caché para: ${personIds.substring(0, 50)}...!`);
+      return res.json(cachedData);
+    }
+
+    const mlbApiUrl = `https://statsapi.mlb.com/api/v1/people?personIds=${personIds}&hydrate=currentTeam,stats(type=season,season=${new Date().getFullYear()}),draftYear`;
+    console.log(`Pidiendo detalles para los jugadores: ${personIds.substring(0, 50)}... (no estaba en caché)`);
     const apiResponse = await axios.get(mlbApiUrl);
+
+    myCache.set(cacheKey, apiResponse.data);
+    console.log(`Datos de jugadores para ${personIds.substring(0, 50)}... guardados en el caché.`);
 
     res.json(apiResponse.data);
 
